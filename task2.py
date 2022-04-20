@@ -16,11 +16,6 @@ TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
 ANNOTATION_DATA_DIR = "task2/TestWithoutRotations/annotations/"
 
-
-def main():
-    pass
-
-
 def loadTrainData(dir: str) -> List[Any]:
     return list(map(lambda fileName: [fileName[4:], cv.imread(dir + fileName)],  os.listdir(dir)))
 
@@ -67,12 +62,18 @@ def loadAnnotations(dir: str):
     return sorted(out, key=lambda x: x[0])
 
 
-print("Loading data...")
-trainData: List[List] = loadTrainData(TRAIN_DATA_DIR)
-testData: List[List] = loadTestData(TEST_DATA_DIR)
-annotData: List[Any] = loadAnnotations(ANNOTATION_DATA_DIR)
+def main():  
+  print("Loading data...")
+  trainData: List[List] = loadTrainData(TRAIN_DATA_DIR)
+  testData: List[List] = loadTestData(TEST_DATA_DIR)
+  annotData: List[Any] = loadAnnotations(ANNOTATION_DATA_DIR)
 
-print("Done")
-print("Train data size:", len(trainData))
-print("Test data size:", len(testData))
+  print("Done")
+  print("Train data size:", len(trainData))
+  print("Test data size:", len(testData))
+
+
+main()
+
+
 
