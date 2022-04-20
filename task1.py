@@ -14,17 +14,22 @@ def getAngleBetweenTwoLines(img):
 
   #print(lines)
   [[_, theta0]] = lines[0]
-  
-  theta1 = 0
+  linesAngle = []
+  angles =[]
+  #theta1 = 0
   # Get the next line that isn't the same as the current one
-  for l in lines[1:]:
-    [[_, tempTheta]] = l
+  for l in lines:
+    [[linesTemp, tempTheta]] = l
+    angles.append(tempTheta)
+    linesAngle.append((linesTemp))
     if abs(tempTheta - theta0) > MIN_ANGLE:
-      theta1 = tempTheta
+      #theta1 = tempTheta
       break
-  
 
-  print("Angle between lines", abs(round(math.degrees(theta0 - theta1), 2)))
+  correcter = 0
+  if (min(linesAngle) < 0):
+    correcter = 180
+  print("Angle between lines", abs(correcter - round(math.degrees(max(angles) - min(angles) ), 2)))
 
 for i in range(1, 11):
   img = cv.imread("data/image" + str(i) + ".png")
