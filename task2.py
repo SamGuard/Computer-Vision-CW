@@ -1,7 +1,9 @@
 from cgi import test
+from distutils.log import error
 from doctest import testfile
 from fileinput import filename
 from multiprocessing.dummy import Array
+from nis import match
 from numbers import Number
 from tokenize import String
 from cv2 import imread, sort
@@ -16,6 +18,8 @@ from scipy.ndimage import gaussian_filter
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
 ANNOTATION_DATA_DIR = "task2/TestWithoutRotations/annotations/"
+
+IS_MATCH_THRESHOLD = 0.015
 
 
 def loadTrainData(dir: str) -> List[Any]:
@@ -68,7 +72,6 @@ def loadAnnotations(dir: str):
 def getBestMatchForIcon(img, pyramid):
     bestScale = 1
     bestScore = 1
-    bestRes = None
     bestPos = None
     for i in range(len(pyramid) - 1, -1, -1):
         res = cv.matchTemplate(img, pyramid[i], cv.TM_SQDIFF_NORMED)
@@ -77,7 +80,6 @@ def getBestMatchForIcon(img, pyramid):
         if(closer < bestScore):
             bestScale = i
             bestScore = closer
-            bestRes = res
             bestPos = minLoc if (minVal < maxVal) else maxLoc
 
     '''
@@ -90,29 +92,10 @@ def getBestMatchForIcon(img, pyramid):
     return [bestScore, bestScale, bestPos]
 
 
-def main():
-    print("Loading data...")
-    iconData: List[List] = loadTrainData(TRAIN_DATA_DIR)
-    testData: List[List] = loadTestData(TEST_DATA_DIR)
-    annotData: List[Any] = loadAnnotations(ANNOTATION_DATA_DIR)
-
-    print("Done")
-    print("Train data size:", len(iconData))
-    print("Test data size:", len(testData))
-
-    image = testData[0][1]
-
-    '''
-    plt.subplot(131), plt.imshow(image, cmap="Greys")
-    plt.title('Image'), plt.xticks([]), plt.yticks([])
-    plt.subplot(132), plt.imshow(icon, cmap="Greys")
-    plt.title('Icon'), plt.xticks([]), plt.yticks([])
-    plt.show()
-    '''
-
+def getIconsInImage(image, icons, annot):
     iconScores = []
     num = 0
-    for _, icon in iconData:
+    for _, icon in icons:
         iconPyramid = [icon]
 
         for i in range(4):
@@ -124,11 +107,92 @@ def main():
         num += 1
 
     iconScores = sorted(iconScores, key=lambda x: x[1])
-    for x in iconScores:
-        print(x)
 
-    for i in range(4):
-        print(iconData[iconScores[i][0]][0])
+    matches = []
+    for i in iconScores:
+        if(i[1] < IS_MATCH_THRESHOLD):
+            matches.append(i)
+        else:
+            break
+
+    print("Icons found:")
+    for m in matches:
+        print(icons[m[0]][0][:-4], m[3], end=", ")
+
+    print("")
+    print("Actual:")
+    for a in annot[1:]:
+        print(a[0], "({}, {})".format(a[1], a[2]), end=", ")
+    print("")
+
+    doesPass: bool
+
+    # Check all icons found are in the image
+    errorFound: str
+    for m in matches:
+        name = icons[m[0]][0][:-4]
+        x = m[3][0]
+        y = m[3][1]
+        doesPass = False
+        for a in annot[1:]:
+            if(a[0] == name and abs(a[1] - x) < 0.5 and abs(a[2] - y) < 0.5):
+                doesPass = True
+                break
+
+        if(not doesPass):
+            errorFound = "Icon \"{}\" was not in the image or in the wrong place".format(name)
+            break
+
+    if(doesPass):
+        # Check all icons have been found
+        for a in annot[1:]:
+            doesPass = False
+            name = a[0]
+            for m in matches:
+                if(name == icons[m[0]][0][:-4]):
+                    doesPass = True
+                    break
+            
+            if(doesPass == False):
+                errorFound = "Icon \"{}\" was in the image but was not found".format(name)
+                break
+                
+
+    if(doesPass == False):
+        print("Test failed", errorFound)
+    else:
+        print("Test passed")
+    
+    print("")
+
+    return doesPass
+
+
+def main():
+    print("Loading data...")
+    iconData: List[List] = loadTrainData(TRAIN_DATA_DIR)
+    testData: List[List] = loadTestData(TEST_DATA_DIR)
+    annotData: List[Any] = loadAnnotations(ANNOTATION_DATA_DIR)
+
+    print("Done")
+    print("Train data size:", len(iconData))
+    print("Test data size:", len(testData))
+
+    '''
+    plt.subplot(131), plt.imshow(image, cmap="Greys")
+    plt.title('Image'), plt.xticks([]), plt.yticks([])
+    plt.subplot(132), plt.imshow(icon, cmap="Greys")
+    plt.title('Icon'), plt.xticks([]), plt.yticks([])
+    plt.show()
+    '''
+    testsPassed = 0
+    for i in range(len(testData)):
+        if(getIconsInImage(testData[i][1], iconData, annotData[i])):
+            testsPassed += 1
+
+    print("")
+    print("")
+    print("Total: {}/{}".format(testsPassed, len(testData)))
 
 
 main()
