@@ -1,19 +1,9 @@
-from cgi import test
-from distutils.log import error
-from doctest import testfile
-from fileinput import filename
-from multiprocessing.dummy import Array
-from nis import match
-from numbers import Number
-from tokenize import String
 from cv2 import imread, sort
 import numpy as np
 import cv2 as cv
-import math
 from matplotlib import pyplot as plt
 from typing import Any, List, Set, Dict, Tuple, Optional
 import os
-from scipy.ndimage import gaussian_filter
 
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
