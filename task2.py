@@ -1,4 +1,5 @@
-from cv2 import imread, sort
+from nis import match
+from cv2 import imread, imwrite, sort
 import numpy as np
 import cv2 as cv
 from matplotlib import pyplot as plt
@@ -9,7 +10,9 @@ TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
 ANNOTATION_DATA_DIR = "task2/TestWithoutRotations/annotations/"
 
-IS_MATCH_THRESHOLD = 0.015
+MATCHING_ALGO = cv.TM_CCORR_NORMED
+IS_MATCH_THRESHOLD = 0.992
+PYRAMID_LEVELS = 4
 
 
 def loadTrainData(dir: str) -> List[Any]:
@@ -60,17 +63,17 @@ def loadAnnotations(dir: str):
 
 # Given an array of scaled icon images find the best match in the image
 def getBestMatchForIcon(img, pyramid):
-    bestScale = 1
-    bestScore = 1
+    bestScale = 0
+    bestScore = 0
     bestPos = None
     for i in range(len(pyramid) - 1, -1, -1):
-        res = cv.matchTemplate(img, pyramid[i], cv.TM_SQDIFF_NORMED)
+        res = cv.matchTemplate(img, pyramid[i], MATCHING_ALGO)
         minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
-        closer = min(minVal, maxVal)
-        if(closer < bestScore):
+        closer = max(minVal, maxVal)
+        if(closer > bestScore):
             bestScale = i
             bestScore = closer
-            bestPos = minLoc if (minVal < maxVal) else maxLoc
+            bestPos = minLoc if (minVal > maxVal) else maxLoc
 
     '''
     plt.subplot(111), plt.imshow(bestRes)
@@ -88,19 +91,17 @@ def getIconsInImage(image, icons, annot):
     for _, icon in icons:
         iconPyramid = [icon]
 
-        for i in range(4):
+        for i in range(PYRAMID_LEVELS):
             iconPyramid.append(cv.pyrDown(iconPyramid[-1]))
-            #plt.subplot(141 + i), plt.imshow(imgPyramid[-1], cmap="Greys")
-            #plt.subplot(141 + i), plt.imshow(iconPyramid[-1], cmap="Greys")
 
         iconScores.append([num] + getBestMatchForIcon(image, iconPyramid))
         num += 1
 
-    iconScores = sorted(iconScores, key=lambda x: x[1])
+    iconScores = sorted(iconScores, key=lambda x: x[1], reverse=True)
 
     matches = []
     for i in iconScores:
-        if(i[1] < IS_MATCH_THRESHOLD):
+        if(i[1] > IS_MATCH_THRESHOLD):
             matches.append(i)
         else:
             break
@@ -118,7 +119,8 @@ def getIconsInImage(image, icons, annot):
     doesPass: bool
 
     # Check all icons found are in the image
-    errorFound: str
+    errorFound: str = ""
+    doesPass = False
     for m in matches:
         name = icons[m[0]][0][:-4]
         x = m[3][0]
@@ -130,7 +132,8 @@ def getIconsInImage(image, icons, annot):
                 break
 
         if(not doesPass):
-            errorFound = "Icon \"{}\" was not in the image or in the wrong place".format(name)
+            errorFound = "Icon \"{}\" was not in the image or in the wrong place".format(
+                name)
             break
 
     if(doesPass):
@@ -142,20 +145,20 @@ def getIconsInImage(image, icons, annot):
                 if(name == icons[m[0]][0][:-4]):
                     doesPass = True
                     break
-            
+
             if(doesPass == False):
-                errorFound = "Icon \"{}\" was in the image but was not found".format(name)
+                errorFound = "Icon \"{}\" was in the image but was not found".format(
+                    name)
                 break
-                
 
     if(doesPass == False):
         print("Test failed", errorFound)
     else:
         print("Test passed")
-    
+
     print("")
 
-    return doesPass
+    return [doesPass, matches]
 
 
 def main():
@@ -176,9 +179,21 @@ def main():
     plt.show()
     '''
     testsPassed = 0
+
     for i in range(len(testData)):
-        if(getIconsInImage(testData[i][1], iconData, annotData[i])):
+        image = testData[i][1]
+        [doesPass, matches] = getIconsInImage(image, iconData, annotData[i])
+        if(doesPass):
             testsPassed += 1
+            for m in matches:
+                size = 512 / (2**(m[2]))
+                pt1 = m[3]
+                pt2 = (int(pt1[0] + size), int(pt1[1] + size))
+                cv.rectangle(image, pt1=pt1, pt2=pt2,
+                             color=(0, 255, 0), thickness=3)
+                cv.putText(image, iconData[m[0]][0][:-4], org=(pt1[0] - 10, pt1[1] - 10),
+                           fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 0, 0), thickness=1)
+            imwrite("task2_output/test" + str(i+1)+".jpg", image)
 
     print("")
     print("")
