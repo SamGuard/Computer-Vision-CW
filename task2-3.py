@@ -1,5 +1,3 @@
-from nis import match
-from re import template
 from cv2 import imread, imshow, imwrite, perspectiveTransform, sort, threshold
 import numpy as np
 import cv2 as cv
