@@ -98,7 +98,7 @@ def check(matches: List[Dict], icons, annot, threshold=0.5):
                 truePos += 1
                 break
 
-        if(not doesPass):
+        if(doesPass == False):
             falsePos += 1
 
     # Check all icons have been found
@@ -113,10 +113,6 @@ def check(matches: List[Dict], icons, annot, threshold=0.5):
         if(doesPass == False):
             falseNeg += 1
 
-    if(doesPass == False):
-        print("Test failed", errorFound)
-    else:
-        print("Test passed")
     print("True Pos, False Pos, False Neg")
     print(f"{truePos}, {falsePos}, {falseNeg}")
 
@@ -287,7 +283,7 @@ def surfTemplateMatching(iconData: List[List], testData: List[List], annotData: 
         imwrite("task3_output/test" + str(num+1)+".jpg", drawingImage)
         num += 1
 
-    s = truePos + falsePos + trueNeg + falsePos
+    s = truePos + falsePos + trueNeg + falseNeg
 
     print("")
     print("")
