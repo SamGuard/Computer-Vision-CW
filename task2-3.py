@@ -1,9 +1,11 @@
-from cv2 import imread, imshow, imwrite, perspectiveTransform, sort, threshold
 import numpy as np
+from sqlalchemy import false
 import cv2 as cv
 from matplotlib import pyplot as plt
 from typing import Any, List, Set, Dict, Tuple, Optional
 import os
+import random
+from scipy import signal
 
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
@@ -60,23 +62,25 @@ def loadAnnotations(dir: str):
     return sorted(out, key=lambda x: x[0])
 
 
-def check(matches: List[Dict], icons, annot, threshold=0.5):
+def check(matches: List[Dict], icons, annot, threshold=0.5, training=False):
     truePos = 0
     falsePos = 0
     trueNeg = 0
     falseNeg = 0
     # matches structure:
     # {"iconIndex", "posTop", "posBott"}
-    print("Icons found:")
-    for m in matches:
-        print(icons[m["iconIndex"]][0][:-4],
-              m["posTop"], m["posBott"], end=", ")
+    if(not training):
+        print("Icons found:")
+        for m in matches:
+            print(icons[m["iconIndex"]][0][:-4],
+                  m["posTop"], m["posBott"], end=", ")
 
-    print("")
-    print("Actual:")
-    for a in annot[1:]:
-        print(a[0], f"({a[1]}, {a[2]}) ({a[3]}, {a[4]})", end=", ")
-    print("")
+    if(not training):
+        print("")
+        print("Actual:")
+        for a in annot[1:]:
+            print(a[0], f"({a[1]}, {a[2]}) ({a[3]}, {a[4]})", end=", ")
+        print("")
 
     doesPass: bool
 
@@ -110,13 +114,30 @@ def check(matches: List[Dict], icons, annot, threshold=0.5):
 
         if(doesPass == False):
             falseNeg += 1
-
-    print("True Pos, False Pos, False Neg")
-    print(f"{truePos}, {falsePos}, {falseNeg}")
-
-    print("")
+    if(not training):
+        print("True Pos, False Pos, False Neg")
+        print(f"{truePos}, {falsePos}, {falseNeg}")
+        print("")
     return [truePos, falsePos, falseNeg]
 
+def normImage(img):
+    avg = np.mean(img)
+    return (img - avg) / (sum((img - avg)**2)**0.5)
+
+def matchTemplateHome(image, template):
+    image = image[0:,0:,1]
+    template = template[0:,0:,1]
+
+    _, size = template.shape
+    _, imageSize = image.shape
+
+    imageNormalised = normImage(image)
+    templateNormalised = normImage(template)
+
+    heatmap = signal.convolve(imageNormalised,templateNormalised, mode= "valid")
+
+    return (heatmap)
+    #return (heatmap / (size ** 2))
 
 # Given an array of scaled icon images find the best match in the image
 def getBestMatchForIcon(img, pyramid):
@@ -124,8 +145,10 @@ def getBestMatchForIcon(img, pyramid):
     bestScore = 0
     bestPos = None
     for i in range(len(pyramid) - 1, -1, -1):
-        res = cv.matchTemplate(img, pyramid[i], MATCHING_ALGO)
+        res = matchTemplateHome(img, pyramid[i])
         minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
+        print(minVal, maxVal)
+        minVal = abs(minVal)
         closer = max(minVal, maxVal)
         if(closer > bestScore):
             bestScale = i
@@ -189,7 +212,7 @@ def templateMatching(iconData: List[List], testData: List[List], annotData: List
                          color=(0, 255, 0), thickness=3)
             cv.putText(image, iconData[m["iconIndex"]][0][:-4], org=(pt1[0] - 10, pt1[1] - 10),
                        fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 0, 0), thickness=1)
-        imwrite("task2_output/test" + str(i+1)+".jpg", image)
+        cv.imwrite("task2_output/test" + str(i+1)+".jpg", image)
 
     s = truePos + falsePos + trueNeg + falsePos
 
@@ -199,41 +222,90 @@ def templateMatching(iconData: List[List], testData: List[List], annotData: List
         f"Total: True Positive {round(100*truePos / s)}%  False Positive {round(100*falsePos / s)}%    False Negative {round(100*falseNeg / s)}%")
 
 
-def getIconInImageSurf(baseImage, image, icon, iconName):
+class Match:
+    def __init__(self, distance, identIndex, queryIndex):
+        self.distance = distance
+        self.queryIdx = queryIndex
+        self.trainIdx = identIndex
+
+    def __repr__(self) -> str:
+        return f"Distance: {self.distance}, Train ID {self.trainIdx}, Query ID {self.queryIdx}"
+
+    def __str__(self):
+        return f"Distance: {self.distance}, Train ID {self.trainIdx}, Query ID {self.queryIdx}"
+
+
+# ident is the image to identify features in
+# query is the image to take features from
+def bruteForceMatcher(query, ident):
+    matches = []
+    for iIndex in range(len(ident)):
+        i = ident[iIndex]
+        bestMatchIndex = -1
+        bestMatchScore = -1
+        for qIndex in range(len(query)):
+            q = query[qIndex]
+            d = np.linalg.norm(q - i)
+
+            if(bestMatchIndex == -1 or d < bestMatchScore):
+                bestMatchIndex = qIndex
+                bestMatchScore = d
+
+        matches.append(Match(bestMatchScore, iIndex, bestMatchIndex))
+
+    return matches
+
+
+def getIconInImageSurf(baseImage, image, icon, iconName, params: Dict = None):
+    surfSize = 750.0
+    distThresh = 0.15
+    minGoodMatches = 10.0
+    ransacThresh = 5.0
+
+    if(params != None):
+        surfSize = params["surfSize"]
+        distThresh = params["distThresh"]
+        minGoodMatches = params["minGoodMatches"]
+        ransacThresh = params["ransacThresh"]
+
     bf = cv.BFMatcher.create(normType=cv.NORM_L2, crossCheck=True)
 
-    surf = cv.xfeatures2d.SURF_create(100)
+    surf = cv.xfeatures2d.SURF_create(surfSize)
     iconKp, iconDes = surf.detectAndCompute(icon, None)
     imgKp, imgDes = surf.detectAndCompute(baseImage, None)
 
-    matches = bf.match(iconDes, imgDes)
-
+    matches = bruteForceMatcher(iconDes, imgDes)
     matches = sorted(matches, key=lambda x: x.distance)
 
     goodMatches = []
 
     for m in matches:
-        if(m.distance < 0.2):
+        if(m.distance < distThresh):
+            # print(m)
             goodMatches.append(m)
-
-    #img3 = cv.drawMatches(image,kp1,iconData[6][1],kp2,goodMatches,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        else:
+            break
+    # img3 = cv.drawMatches(image,kp1,iconData[6][1],kp2,goodMatches,None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     # plt.imshow(img3)
     # plt.show()
 
-    if(len(goodMatches) >= 10):
+    if(len(goodMatches) >= minGoodMatches):
         src_pts = np.float32(
             [iconKp[m.queryIdx].pt for m in goodMatches]).reshape(-1, 1, 2)
         dst_pts = np.float32(
             [imgKp[m.trainIdx].pt for m in goodMatches]).reshape(-1, 1, 2)
-        M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
+        M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, ransacThresh)
         matchesMask = mask.ravel().tolist()
         h, w, _ = image.shape
         pts = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]
                          ).reshape(-1, 1, 2)
-        dst = cv.perspectiveTransform(pts, M)
+        try:
+            dst = cv.perspectiveTransform(pts, M)
+        except:
+            return [None, None, None]
         image = cv.polylines(image, [np.int32(dst)],
                              True, (0, 255, 0), 3, cv.LINE_AA)
-        #plt.imshow(image), plt.show()
+        # plt.imshow(image), plt.show()
         # draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
         #                   singlePointColor=None,
         #                   matchesMask=matchesMask,  # draw only inliers
@@ -251,7 +323,7 @@ def getIconInImageSurf(baseImage, image, icon, iconName):
     return [None, None, None]
 
 
-def surfTemplateMatching(iconData: List[List], testData: List[List], annotData: List[Any]):
+def surfTemplateMatching(iconData: List[List], testData: List[List], annotData: List[Any], params: Dict = None, training: bool = False):
     truePos = 0
     falsePos = 0
     trueNeg = 0
@@ -261,11 +333,12 @@ def surfTemplateMatching(iconData: List[List], testData: List[List], annotData: 
         matches = []
         drawingImage: cv.Mat = baseImage.copy()
 
-        for i in range(len(iconData)):
+        for i in range(len(iconData)):  # range(6, 7, 1):
+            # print(i)
             icon: cv.Mat = iconData[i][1].copy()
 
             topPos, bottPos, image = getIconInImageSurf(
-                baseImage, drawingImage, icon, iconData[i][0][:-4])
+                baseImage, drawingImage, icon, iconData[i][0][:-4], params)
             if(topPos != None and bottPos != None):
                 drawingImage = image
                 matches.append(
@@ -274,19 +347,49 @@ def surfTemplateMatching(iconData: List[List], testData: List[List], annotData: 
         # plt.imshow(drawingImage)
         # plt.show()
 
-        [x, y, z] = check(matches, iconData, annotData[num], threshold=10)
+        [x, y, z] = check(matches, iconData, annotData[num],
+                          threshold=10, training=training)
         truePos += x
         falsePos += y
         falseNeg += z
-        imwrite("task3_output/test" + str(num+1)+".jpg", drawingImage)
+        if(training == False):
+            cv.imwrite("task3_output/test" + str(num+1)+".jpg", drawingImage)
         num += 1
 
     s = truePos + falsePos + trueNeg + falseNeg
 
-    print("")
-    print("")
-    print(
-        f"Total: True Positive {round(100*truePos / s)}%  False Positive {round(100*falsePos / s)}%    False Negative {round(100*falseNeg / s)}%")
+    if(training == False):
+        print("")
+        print("")
+        print(
+            f"Total: True Positive {round(100*truePos / s)}%  False Positive {round(100*falsePos / s)}%    False Negative {round(100*falseNeg / s)}%")
+        return
+    else:
+        print(
+            f"Total: True Positive {truePos}%  False Positive {falsePos}%    False Negative {falseNeg}%")
+        return truePos + trueNeg - falsePos - falseNeg
+
+
+def trainSurfParams(iconData, testData, annotData):
+    defParams = {"surfSize": 736.0849596093133, "distThresh": 0.1530496234754787,
+                 "minGoodMatches": 8, "ransacThresh": 5.58664439503451}
+    bestParams = [None, defParams.copy()]
+    for i in range(100):
+        testP = bestParams[1].copy()
+        testP["surfSize"] += 20 * (random.random() - 0.5)
+        testP["distThresh"] += 0.01 * (random.random() - 0.5)
+        testP["minGoodMatches"] += int(2.5 * (random.random() - 0.5))
+        testP["ransacThresh"] += 1 * (random.random() - 0.5)
+
+        score = surfTemplateMatching(
+            iconData, testData, annotData, testP, True)
+        print("score", score)
+        if(bestParams[0] == None or score > bestParams[0]):
+            bestParams[0] = score
+            bestParams[1] = testP.copy()
+            print(
+                f"New best score: surf size={testP['surfSize']}, dist thresh={testP['distThresh']}, min good matches={testP['minGoodMatches']}, ransac={testP['ransacThresh']}"
+            )
 
 
 def main():
@@ -307,9 +410,10 @@ def main():
     plt.show()
     '''
 
-    #templateMatching(iconData, testData, annotData)
+    templateMatching(iconData, testData, annotData)
 
-    surfTemplateMatching(iconData, testData, annotData)
+    #surfTemplateMatching(iconData, testData, annotData)
+    #trainSurfParams(iconData, testData, annotData)
 
 
 main()
