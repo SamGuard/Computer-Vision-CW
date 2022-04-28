@@ -3,6 +3,7 @@ import signal
 
 import cv2 as cv
 import numpy as np
+from scipy.signal import fftconvolve
 from matplotlib import pyplot as plt
 
 
@@ -17,6 +18,26 @@ def NormalizeData(data):
 
 def normaliseCC(imageKernel, templete):
     return (1/(imageKernel.size-1)) * np.sum(NormalizeData(imageKernel)* templete)
+
+def test (image, template):
+    template = template - np.mean(template)
+    image = image - np.mean(image)
+
+    a1 = np.ones(template.shape)
+    # Convolve
+    ar = np.flipud(np.fliplr(template))
+
+    out = fftconvolve(image, ar.conj(), mode="full")
+
+    volume = np.prod(template.shape)
+
+    image = fftconvolve(np.square(image), a1, mode="full") - \
+            np.square(fftconvolve(image, a1, mode="full")) / volume
+
+    template = np.sum(np.square(template))
+    out = out / np.sqrt(image * template)
+
+    return out
 
 def matchTemplateHome(image, template):
     print(image.shape)
