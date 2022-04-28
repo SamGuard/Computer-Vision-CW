@@ -5,34 +5,37 @@ import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 
+
+def NormalizeData(data):
+    """
+    normalize data to have mean=0 and standard_deviation=1
+    """
+    mean_data=np.mean(data)
+    std_data=np.std(data, ddof=1)
+    return (data-mean_data)/(std_data)
+
+
+def normaliseCC(imageKernel, templete):
+    return (1/(imageKernel.size-1)) * np.sum(NormalizeData(imageKernel)* templete)
+
 def matchTemplateHome(image, template):
+    print(image.shape)
+    print(template.shape)
     image = image[0:,0:,1]
     template = template[0:,0:,1]
 
-    _, size = template.shape
     _, imageSize = image.shape
+    _, size = template.shape
 
-    #TEMPLATE Norm
-    templateAverage = np.mean(template)
-    templateSD = np.std(template)
+    imageNormalised = NormalizeData(image)
+    templateNormalised = NormalizeData(template)
+    heatmap = np.zeros((imageSize - size + 1, imageSize - size + 1))
+    for x in range(imageSize - size + 1):
+        for y in range(imageSize - size + 1):
+            heatmap[x][y] = normaliseCC(imageNormalised[x:x + size, y:y + size], templateNormalised)
 
-    templateNormalised = [[(template[x][y] - templateAverage) / templateSD for x in range(size)] for y in range(size)]
-
-    #IMAGE Norm
-    imageAverage = np.mean(image)
-    imageSD = np.std(image)
-
-    imageNormalised = [[(image[x][y] - imageAverage) / imageSD for x in range(imageSize)] for y in range(imageSize)]
-
-    #Convolve???? I have tried multiple ways of achieving f hat * g hat from lectures with no sucsess
-    heatmap = signal.convolve2d(imageNormalised,templateNormalised, mode= "valid")
-
-    #for x in range(imageSize - size +1):
-     #   for y in range(imageSize - size + 1):
-      #      heatmap[x][y] = (np.dot(np.array(imageNormalised[x:x+size, y:y+size]).flatten(),np.array(templateNormalised).flatten()) +1)/2
 
     return (heatmap)
-    #return (heatmap / (size ** 2))
 
 
 
