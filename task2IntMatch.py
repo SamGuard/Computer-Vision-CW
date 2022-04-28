@@ -19,7 +19,7 @@ def NormalizeData(data):
 def normaliseCC(imageKernel, templete):
     return (1/(imageKernel.size-1)) * np.sum(NormalizeData(imageKernel)* templete)
 
-def test (image, template):
+def testcode(image, template):
     template = template - np.mean(template)
     image = image - np.mean(image)
 
@@ -27,16 +27,17 @@ def test (image, template):
     # Convolve
     ar = np.flipud(np.fliplr(template))
 
-    out = fftconvolve(image, ar.conj(), mode="full")
+    out = fftconvolve(image, ar, mode="valid")
 
     volume = np.prod(template.shape)
 
-    image = fftconvolve(np.square(image), a1, mode="full") - \
-            np.square(fftconvolve(image, a1, mode="full")) / volume
+    image = fftconvolve(np.square(image), a1, mode="valid") - \
+            np.square(fftconvolve(image, a1, mode="valid")) / volume
 
     template = np.sum(np.square(template))
     out = out / np.sqrt(image * template)
-
+    # Remove any divisions by 0 or very close to 0
+    out[np.where(np.logical_not(np.isfinite(out)))] = 0
     return out
 
 def matchTemplateHome(image, template):

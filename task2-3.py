@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.ndimage import gaussian_filter
 from sqlalchemy import false
 import cv2 as cv
 from matplotlib import pyplot as plt
@@ -6,6 +7,8 @@ from typing import Any, List, Set, Dict, Tuple, Optional
 import os
 import random
 from scipy import signal
+
+from task2IntMatch import testcode
 
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
@@ -145,7 +148,7 @@ def getBestMatchForIcon(img, pyramid):
     bestScore = 0
     bestPos = None
     for i in range(len(pyramid) - 1, -1, -1):
-        res = matchTemplateHome(img, pyramid[i])
+        res = testcode(img[0:,0:,0], pyramid[i])
         minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
         print(minVal, maxVal)
         minVal = abs(minVal)
@@ -169,10 +172,14 @@ def getIconsInImage(image, icons, annot):
     iconScores = []
     num = 0
     for _, icon in icons:
+        icon = icon[0:, 0:, 0]
         iconPyramid = [icon]
 
         for i in range(PYRAMID_LEVELS):
-            iconPyramid.append(cv.pyrDown(iconPyramid[-1]))
+            icon = gaussian_filter(icon, sigma=1)
+            icon = icon[0::2, 0::2]
+            iconPyramid.append(icon)
+            #iconPyramid.append(cv.pyrDown(iconPyramid[-1]))
 
         iconScores.append([num] + getBestMatchForIcon(image, iconPyramid))
         num += 1
