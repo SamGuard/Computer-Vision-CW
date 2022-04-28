@@ -27,6 +27,10 @@ def matchTemplateHome(image, template):
     #Convolve???? I have tried multiple ways of achieving f hat * g hat from lectures with no sucsess
     heatmap = signal.convolve2d(imageNormalised,templateNormalised, mode= "valid")
 
+    #for x in range(imageSize - size +1):
+     #   for y in range(imageSize - size + 1):
+      #      heatmap[x][y] = (np.dot(np.array(imageNormalised[x:x+size, y:y+size]).flatten(),np.array(templateNormalised).flatten()) +1)/2
+
     return (heatmap)
     #return (heatmap / (size ** 2))
 
