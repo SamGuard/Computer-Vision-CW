@@ -100,8 +100,7 @@ def getIconsInImage(image, icons, annot):
             #Correct for rotation changing size
             if (not (i[4] % 6 == 0)):
                 if (i[4] % 3 == 0):
-
-                    size = size * math.sin(math.radians(45)) * 2
+                    size = size * (math.sin(math.radians(45)) * 2)
                     size = math.ceil(size)
                 else:
                     if (i[4] % 2 == 0):
