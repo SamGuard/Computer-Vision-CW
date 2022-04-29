@@ -9,7 +9,7 @@ import os
 import random
 from scipy import signal, ndimage
 
-from task2IntMatch import testcode
+from task2IntMatch import matchTemplateNCC
 
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/test_data_with_rotations/images/"
@@ -151,7 +151,7 @@ def getBestMatchForIcon(img, pyramid):
     for i in range(len(pyramid) - 1, -1, -1):
         image_list = [ndimage.rotate(pyramid[i], ang, reshape=True, cval=255) for ang in range(0, 360, 45)]
         for o in range(len(image_list)):
-            res = testcode(img, image_list[o])
+            res = matchTemplateNCC(img, image_list[o])
             minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
             #print(maxVal)
             minVal = abs(minVal)
