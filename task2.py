@@ -31,7 +31,10 @@ def getBestMatchForIcon(img, pyramid):
     bestScore = 0
     bestPos = None
     bestRes = None
+
+    #For each icon in gaussian pyramid
     for i in range(len(pyramid) - 1, 0, -1):
+        #If we are using Rotations we should test each stage of the gaussian pyramid rotated
         if(USE_ROTATION):
             image_list = [ndimage.rotate(
                 pyramid[i], ang, reshape=True, cval=255) for ang in range(0, 360, 15)]
@@ -39,12 +42,16 @@ def getBestMatchForIcon(img, pyramid):
             image_list = [pyramid[i]]
 
         rotNum = 0
+
         for template in image_list:
+            #Complete the Normalised cross correlation for the current template and img
             res = matchTemplateNCC(img, template)
             minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
             # print(maxVal)
             minVal = abs(minVal)
+            #find points that give highest correlation
             closer = max(minVal, maxVal)
+            #Store result details if it is the best for the icon
             if(closer > bestScore):
                 bestScale = i
                 bestScore = closer
@@ -53,8 +60,6 @@ def getBestMatchForIcon(img, pyramid):
 
             rotNum += 1
 
-    # plt.imshow(bestRes)
-    # plt.show()
     return [bestScore, bestScale, bestPos, bestRot]
 
 
@@ -63,35 +68,53 @@ def getIconsInImage(image, icons, annot):
     num = 0
     x = 0
     for name, icon in icons:
+        #Make the icon gray for Normalised cross correlation
         icon = cv.cvtColor(icon, cv.COLOR_BGR2GRAY)
+
+        #Creating the gaussian pyramid
         iconPyramid = [icon]
         for i in range(PYRAMID_LEVELS):
             lastI = iconPyramid[-1]
-            avgKernel = np.zeros((2, 2))  # np.zeros(lastI.shape)
+            avgKernel = np.zeros((2, 2))
             downScaled = cv.resize(
                 lastI, (lastI.shape[0] // 2, lastI.shape[1] // 2), interpolation=cv.INTER_AREA)
-            # plt.imshow(downScaled)
-            # plt.show()
-            iconPyramid.append(gaussian_filter(downScaled, sigma=0.5))
+            iconPyramid.append(gaussian_filter(downScaled, sigma=1))
 
+        #Finding the best score for each icon type (passing its gaussian pyramid)
         iconScores.append([num] + getBestMatchForIcon(image, iconPyramid))
         print("Done icon", name)
         num += 1
 
+
     iconScores = sorted(iconScores, key=lambda x: x[1], reverse=True)
 
     matches = []
+    #Starting at the best performing icon and going down, add to successes if more than threshold else stop
     for i in iconScores:
         if(i[1] > IS_MATCH_THRESHOLD):
             print(i[1])
-            size = 512 / (2**(i[2]))
+            size = 512 / (2 ** (i[2]))
+            
+            #Correct for rotation changing size
+            if (not(i[4] % 6 ==0)):
+                if(i[4] % 3 ==0):
+                    size = size * math.sin(45)*2
+                    size = math.ceil(size)
+                else:
+                    if(i[4] % 2 ==0):
+                        size = size * (math.sin(30)+math.cos(30))
+                        size = math.ceil(size)
+                    else:
+                        size = size * (math.sin(15)+math.cos(15))
+                        size = math.ceil(size)
+
             pt1 = i[3]
             pt2 = (int(pt1[0] + size), int(pt1[1] + size))
             matches.append(
                 {"iconIndex": i[0], "posTop": i[3], "posBott": pt2, "scale": i[2], "rot": i[3]})
         else:
             break
-
+    #Return comparison of matches to actual.
     return check(matches, icons, annot) + [matches]
 
 
@@ -101,14 +124,17 @@ def templateMatching(iconData: List[List], testData: List[List], annotData: List
     falsePos = 0
     trueNeg = 0
     falseNeg = 0
+    #For each test image
     for i in range(len(testData)):
         image = testData[i][1].copy()
-        # print(image.shape)
+        #Create a gray image for Normalised cross correlation
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        #Get results from matching icons with the images
         [x, y, z, matches] = getIconsInImage(gray, iconData, annotData[i])
         truePos += x
         falsePos += y
         falseNeg += z
+        #Draw retangles and text for each match found and create resultant image
         for m in matches:
             pt1 = m["posTop"]
             pt2 = m["posBott"]
@@ -130,7 +156,7 @@ def main():
     testData: List[List] = loadTestData(TEST_DATA_DIR)
     annotData: List[Any] = loadAnnotations(ANNOTATION_DATA_DIR)
 
-    print("Done")
+    print("Done loading")
     print("Train data size:", len(iconData))
     print("Test data size:", len(testData))
 
