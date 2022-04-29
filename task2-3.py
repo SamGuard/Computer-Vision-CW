@@ -8,7 +8,7 @@ import os
 import random
 from scipy import signal
 
-from task2IntMatch import testcode
+from task2IntMatch import matchTemplateNCC
 
 TRAIN_DATA_DIR = "task2/Training/png/"
 TEST_DATA_DIR = "task2/TestWithoutRotations/images/"
@@ -148,7 +148,7 @@ def getBestMatchForIcon(img, pyramid):
     bestScore = 0
     bestPos = None
     for i in range(len(pyramid) - 1, -1, -1):
-        res = testcode(img[0:,0:,0], pyramid[i])
+        res = matchTemplateNCC(img[0:,0:,0], pyramid[i])
         minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(res)
         print(minVal, maxVal)
         minVal = abs(minVal)

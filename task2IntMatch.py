@@ -19,26 +19,30 @@ def NormalizeData(data):
 def normaliseCC(imageKernel, templete):
     return (1/(imageKernel.size-1)) * np.sum(NormalizeData(imageKernel)* templete)
 
-def testcode(image, template):
+def matchTemplateNCC(image, template):
+    #Numerator
+    #f-f(line)
     template = template - np.mean(template)
+    #g-g(line)
     image = image - np.mean(image)
+    #cross correlation
+    flippedIcon = np.flipud(np.fliplr(template))
+    #create numerator via convolutuion
+    imageIcon = fftconvolve(image, flippedIcon, mode="valid")
 
-    a1 = np.ones(template.shape)
-    # Convolve
-    ar = np.flipud(np.fliplr(template))
-
-    out = fftconvolve(image, ar, mode="valid")
-
+    #Denominator
+    ones = np.ones(template.shape)
     volume = np.prod(template.shape)
+    #setup (g-g(line))^2
+    image = fftconvolve(np.square(image), ones, mode="valid") - np.square(fftconvolve(image, ones, mode="valid")) / volume
 
-    image = fftconvolve(np.square(image), a1, mode="valid") - \
-            np.square(fftconvolve(image, a1, mode="valid")) / volume
-
+    #multiply by (f-f(line))^2
     template = np.sum(np.square(template))
-    out = out / np.sqrt(image * template)
-    # Remove any divisions by 0 or very close to 0
-    out[np.where(np.logical_not(np.isfinite(out)))] = 0
-    return out
+    #create f(hat)*g(hat)
+    ncc = imageIcon / np.sqrt(image * template)
+    #remove divide by zero
+    ncc[np.where(np.logical_not(np.isfinite(ncc)))] = 0
+    return ncc
 
 def matchTemplateHome(image, template):
     print(image.shape)
