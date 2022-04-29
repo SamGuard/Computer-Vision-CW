@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
@@ -94,18 +96,19 @@ def getIconsInImage(image, icons, annot):
         if(i[1] > IS_MATCH_THRESHOLD):
             print(i[1])
             size = 512 / (2 ** (i[2]))
-            
+
             #Correct for rotation changing size
-            if (not(i[4] % 6 ==0)):
-                if(i[4] % 3 ==0):
-                    size = size * math.sin(45)*2
+            if (not (i[4] % 6 == 0)):
+                if (i[4] % 3 == 0):
+
+                    size = size * math.sin(math.radians(45)) * 2
                     size = math.ceil(size)
                 else:
-                    if(i[4] % 2 ==0):
-                        size = size * (math.sin(30)+math.cos(30))
+                    if (i[4] % 2 == 0):
+                        size = size * (math.sin(math.radians(30)) + math.cos(math.radians(30)))
                         size = math.ceil(size)
                     else:
-                        size = size * (math.sin(15)+math.cos(15))
+                        size = size * (math.sin(math.radians(15)) + math.cos(math.radians(15)))
                         size = math.ceil(size)
 
             pt1 = i[3]
